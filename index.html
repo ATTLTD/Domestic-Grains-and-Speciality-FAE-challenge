@@ -234,7 +234,7 @@ body.booting .overlay,body.booting .btxt{visibility:hidden}
 .mode-note{font-size:13px;color:var(--muted);background:var(--bg);border-radius:10px;padding:10px 12px;margin:14px 0 0}
 </style>
 </head>
-<body class="booting">
+<body>
 <div id="app">
 
   <!-- 首頁 -->
@@ -341,7 +341,7 @@ const DEFAULT_SITE = {
     passTitle: "恭喜通過挑戰！",
     failTitle: "感謝參與挑戰",
     passNote: "請至服務台出示本畫面與序號，作為兌換憑證。",
-    failNote: "再接再厲，您一定可以通過！ 也可以去攤位上詢問答案唷~",
+    failNote: "再接再厲，您一定可以通過！",
     repassTitle: "恭喜您再次通關！",
     repassNote: "兌換序號維持不變（每人只能獲得一次序號）。",
     soldOutNote: "兌換序號已全數發放完畢。",
@@ -664,6 +664,10 @@ async function initBackend(){
    4. 狀態與畫面
    ========================================================= */
 let backend = null;
+let backendReady = Promise.resolve(null); // 後端連線完成的 Promise（送出答案前會等待）
+const SITE_CACHE_KEY = "quiz_site_cache_v1";
+function readSiteCache(){ try{ return JSON.parse(lsGet(SITE_CACHE_KEY) || "null"); }catch(e){ return null; } }
+function writeSiteCache(o){ lsSet(SITE_CACHE_KEY, JSON.stringify(o)); }
 let site = deepMerge(clone(DEFAULT_SITE), CONFIG.siteOverrides);
 let images = {};
 let current = [];      // 本次抽出的題目（含選項打亂後的對照）
@@ -745,8 +749,7 @@ function applySite(){
 
 function updateStartBtn(){
   const b = $("#startBtn");
-  if(!backend){ b.disabled = true; b.textContent = "載入中"; return; }
-  b.disabled = false;
+  b.disabled = false; // 不必等後端：題目在本機產生，送出時才需要後端
   b.textContent = record ? "再挑戰一次" : site.home.button;
   const m = $("#mySerialBtn");
   m.hidden = NO_SERIAL || !(record && record.serial != null);
@@ -798,6 +801,8 @@ function updateProgress(){
 }
 async function submitQuiz(){
   const btn = $("#submitBtn"); btn.disabled = true; btn.textContent = "送出中…";
+  try{ await backendReady; }catch(e){}
+  if(!backend) backend = localBackend();
   let correct = 0;
   const review = current.map((item, qi) => {
     const chosenOrig = answersOf(qi);
@@ -1150,6 +1155,7 @@ async function saveAdmin(){
     await backend.saveSite(draft, draftImgs, [...changedImgs]);
     site = draft; images = draftImgs;
     if(serialStatus) serialStatus.limit = site.serialLimit;
+    writeSiteCache({cfg: site, imgs: images, status: serialStatus});
     applySite(); closeAdmin(); toast("已儲存版面與題庫");
   }catch(e){ console.error(e); toast("儲存失敗：" + (e.message || e.code || "請稍後再試")); }
   b.disabled = false; b.textContent = "儲存變更";
@@ -1192,28 +1198,51 @@ $("#saveCfg").addEventListener("click", saveAdmin);
 $("#copyCfg").addEventListener("click", copyConfig);
 
 if(CONFIG.siteOverrides && CONFIG.siteOverrides.__images){ images = {...CONFIG.siteOverrides.__images}; delete site.__images; }
+const BASE_IMAGES = {...images};
+
+/* 開啟速度：先用「本機快取的版面設定＋本機作答紀錄」立即顯示畫面，
+   後端（Google Apps Script）在背景載入，有變動時才更新畫面，玩家不必等待。 */
+const cachedSite = readSiteCache();
+if(cachedSite){
+  if(cachedSite.cfg) site = deepMerge(clone(DEFAULT_SITE), cachedSite.cfg);
+  if(cachedSite.imgs) images = {...BASE_IMAGES, ...cachedSite.imgs};
+  if(cachedSite.status) serialStatus = cachedSite.status;
+}
+if(!NO_SERIAL) record = getLocalRecord();
 applySite();
 
-(async () => {
-  setTimeout(() => document.body.classList.remove("booting"), 6000); // 後端過慢時仍顯示預設內容
+backendReady = (async () => {
   backend = await initBackend();
   if(backend.mode === "api"){ try{ backend.adminKey = sessionStorage.getItem("quiz_admin_key") || ""; }catch(e){} }
-  try{
-    const {cfg, imgs} = await backend.loadSite();
-    if(cfg) site = deepMerge(clone(DEFAULT_SITE), cfg);
-    if(imgs && Object.keys(imgs).length) images = {...images, ...imgs};
-  }catch(e){ console.warn("讀取版面設定失敗，使用預設值", e); }
-  try{ serialStatus = await backend.getStatus(); }catch(e){ console.warn("讀取序號發放狀態失敗", e); }
-  if(!NO_SERIAL){
+  // 版面設定與作答紀錄同時載入
+  const siteTask = (async () => {
     try{
-      // 讀取此裝置的紀錄（是否已持有序號）；伺服器紀錄為準，本機紀錄為備援
-      record = (await backend.getRecord()) || getLocalRecord();
-      if(record) setLocalRecord(record);
-    }catch(e){ console.warn("讀取作答紀錄失敗", e); record = getLocalRecord(); }
+      const {cfg, imgs} = await backend.loadSite();
+      let status = null;
+      try{ status = await backend.getStatus(); }catch(e){}
+      return {cfg: cfg || null, imgs: imgs || {}, status};
+    }catch(e){ console.warn("讀取版面設定失敗，沿用目前內容", e); return null; }
+  })();
+  const recordTask = NO_SERIAL ? Promise.resolve(null)
+    : backend.getRecord().catch(e => { console.warn("讀取作答紀錄失敗", e); return null; });
+  const [fresh, rec] = await Promise.all([siteTask, recordTask]);
+  let changed = false;
+  if(fresh){
+    const before = JSON.stringify(cachedSite ? {cfg: cachedSite.cfg || null, imgs: cachedSite.imgs || {}, status: cachedSite.status || null} : null);
+    const after = JSON.stringify(fresh);
+    if(before !== after){
+      site = fresh.cfg ? deepMerge(clone(DEFAULT_SITE), fresh.cfg) : deepMerge(clone(DEFAULT_SITE), CONFIG.siteOverrides);
+      delete site.__images;
+      images = {...BASE_IMAGES, ...fresh.imgs};
+      if(fresh.status) serialStatus = fresh.status;
+      changed = true;
+    }
+    writeSiteCache(fresh);
   }
-  applySite();
-  document.body.classList.remove("booting");
+  if(rec && JSON.stringify(rec) !== JSON.stringify(record)){ record = rec; setLocalRecord(rec); changed = true; }
+  if(changed) applySite(); else updateStartBtn();
   if(backend.canEdit) $("#adminFab").classList.add("on");
+  return backend;
 })();
 </script>
 </body>
