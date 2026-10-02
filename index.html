@@ -341,7 +341,7 @@ const DEFAULT_SITE = {
     passTitle: "恭喜通過挑戰！",
     failTitle: "感謝參與挑戰",
     passNote: "請至服務台出示本畫面與序號，作為兌換憑證。",
-    failNote: "差一點就通過了，歡迎再挑戰一次！",
+    failNote: "再接再厲，您一定可以通過！ 也可以去攤位上詢問答案唷~",
     repassTitle: "恭喜您再次通關！",
     repassNote: "兌換序號維持不變（每人只能獲得一次序號）。",
     soldOutNote: "兌換序號已全數發放完畢。",
@@ -350,6 +350,7 @@ const DEFAULT_SITE = {
   share: {
     url: "https://attltd.github.io/Domestic-Grains-and-Speciality-FAE-challenge/", text: "我在「{title}」的答題正確率是 {rate}%！你也來挑戰看看：",
     toNoSerial: true, // true：分享出去的連結導向不發序號的體驗版
+    previewVersion: "2", // 結果預覽頁網址加上 ?v=版本號，用來避開臉書／LINE 的舊快取；需要強制更新時改成新的數字
     resultPages: true, // true：臉書／LINE 分享改用 r/0.html～r/100.html 結果預覽頁（需上傳 r 資料夾）
     imageTitle: "國產雜糧特作食農知識小挑戰" // 分享圖主標（顯示於主視覺圖下方，多行時取最後一行）
   },
@@ -908,7 +909,9 @@ function resultShareUrl(){
     const u = new URL(base);
     u.search = ""; u.hash = "";
     if(!u.pathname.endsWith("/") && !/\.[a-z0-9]+$/i.test(u.pathname)) u.pathname += "/";
-    return new URL("r/" + rate + ".html", u).toString();
+    const r = new URL("r/" + rate + ".html", u);
+    if(site.share.previewVersion) r.searchParams.set("v", String(site.share.previewVersion));
+    return r.toString();
   }catch(e){ return shareUrl(); }
 }
 function updateShareLinks(){
@@ -1057,6 +1060,7 @@ function renderAdmin(){
         <span style="font-size:14px">分享連結導向「體驗版」（不發序號，網址會自動加上 ?mode=share）</span></label>
       <label class="field" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="resultPages" ${draft.share.resultPages ? "checked" : ""} style="width:20px;height:20px">
         <span style="font-size:14px">臉書／LINE 分享顯示玩家的正確率結果圖（需已上傳 r 資料夾）</span></label>
+      ${field("結果預覽版本號（更換結果圖後改成新數字，可避開臉書／LINE 舊快取）","share.previewVersion")}
       ${field("分享文字（{title} = 遊戲名稱、{rate} = 正確率）","share.text", true)}
       ${field("分享圖主標（顯示於活動主視覺圖下方）","share.imageTitle")}
     </fieldset>
@@ -1165,6 +1169,23 @@ $("#replayBtn").addEventListener("click", startQuiz);
 $("#mySerialBtn").addEventListener("click", () => { renderResult(record, false, true); show("p-result"); });
 $("#submitBtn").addEventListener("click", submitQuiz);
 $("#shareIG").addEventListener("click", shareIG);
+/* 手機上的臉書分享：臉書 App 不處理網頁版分享網址（只會打開 App），
+   因此改用系統分享選單，由玩家選擇 Facebook；不支援時改為複製連結。電腦版維持原本的分享視窗。 */
+function isMobileDevice(){
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+}
+$("#shareFB").addEventListener("click", async (e) => {
+  if(!isMobileDevice()) return;
+  e.preventDefault();
+  const url = resultShareUrl();
+  if(navigator.share){
+    try{ await navigator.share({ title: site.gameTitle, text: shareText(), url }); return; }
+    catch(err){ if(err && err.name === "AbortError") return; }
+  }
+  let copied = false;
+  try{ await navigator.clipboard.writeText(url); copied = true; }catch(_){}
+  toast(copied ? "連結已複製，請開啟臉書並在貼文中貼上分享。" : "請長按複製網址後，到臉書貼文中分享：" + url);
+});
 $("#adminFab").addEventListener("click", openAdmin);
 $("#sheetClose").addEventListener("click", closeAdmin);
 $("#saveCfg").addEventListener("click", saveAdmin);
