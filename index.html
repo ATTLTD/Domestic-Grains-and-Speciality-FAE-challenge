@@ -351,6 +351,7 @@ const DEFAULT_SITE = {
     url: "https://attltd.github.io/Domestic-Grains-and-Speciality-FAE-challenge/", text: "我在「{title}」的答題正確率是 {rate}%！你也來挑戰看看：",
     toNoSerial: true, // true：分享出去的連結導向不發序號的體驗版
     previewVersion: "2", // 結果預覽頁網址加上 ?v=版本號，用來避開臉書／LINE 的舊快取；需要強制更新時改成新的數字
+    fbMobileMode: "image", // 手機臉書分享方式：image 分享結果圖片（編輯畫面立即可見）／link 分享連結（由臉書產生預覽卡）
     resultPages: true, // true：臉書／LINE 分享改用 r/0.html～r/100.html 結果預覽頁（需上傳 r 資料夾）
     imageTitle: "國產雜糧特作食農知識小挑戰" // 分享圖主標（顯示於主視覺圖下方，多行時取最後一行）
   },
@@ -867,6 +868,20 @@ function renderResult(rec, animate, serialView){
   flag.textContent = "目前為本機示範模式，序號僅在此裝置遞增，正式上線需接後端。";
   updateShareLinks();
   renderReview(rec.review);
+  prepareShareImage();
+}
+/* 預先產生分享圖，讓點擊分享時能立即開啟分享選單（部分手機瀏覽器要求在點擊後短時間內呼叫） */
+let shareImageCache = { key: "", blob: null };
+function shareImageKey(){ return record ? [record.rate, record.passed, site.share.imageTitle, site.gameTitle].join("|") : ""; }
+function prepareShareImage(){
+  const key = shareImageKey(); if(!key || shareImageCache.key === key) return;
+  shareImageCache = { key, blob: null };
+  setTimeout(() => { makeShareImage().then(b => { if(shareImageCache.key === key) shareImageCache.blob = b; }).catch(() => {}); }, 300);
+}
+async function getShareImageFile(){
+  const key = shareImageKey();
+  const blob = (shareImageCache.key === key && shareImageCache.blob) ? shareImageCache.blob : await makeShareImage();
+  return new File([blob], "quiz-result.jpg", { type: "image/jpeg" });
 }
 function renderReview(list){
   const box = $("#review"), wrap = $("#reviewList");
@@ -979,12 +994,12 @@ async function makeShareImage(){
   x.fillStyle=O; x.beginPath();
   if(x.roundRect) x.roundRect(px, py, pw, ph, 36); else x.rect(px, py, pw, ph);
   x.fill(); x.fillStyle="#fff"; x.fillText(pt, rx, py + 51);
-  return new Promise(r => c.toBlob(r, "image/png"));
+  return new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
 }
 async function shareIG(){
   if(!record) return;
   const blob = await makeShareImage();
-  const file = new File([blob], "quiz-result.png", {type:"image/png"});
+  const file = new File([blob], "quiz-result.jpg", {type:"image/jpeg"});
   try{
     if(navigator.canShare && navigator.canShare({files:[file]})){
       await navigator.share({files:[file], text: shareText() + shareUrl()});
@@ -994,11 +1009,11 @@ async function shareIG(){
   // 無法直接分享時：下載結果圖
   let saved = false;
   if(window.claude && typeof window.claude.use === "function"){
-    try{ const dl = await claude.use("downloads"); if(dl){ await dl.save({filename:"quiz-result.png", data: blob}); saved = true; } }
+    try{ const dl = await claude.use("downloads"); if(dl){ await dl.save({filename:"quiz-result.jpg", data: blob}); saved = true; } }
     catch(e){ if(e && e.code === "declined") return; }
   }
   if(!saved){
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "quiz-result.png";
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "quiz-result.jpg";
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
   }
   try{ await navigator.clipboard.writeText(shareText() + shareUrl()); }catch(e){}
@@ -1065,6 +1080,9 @@ function renderAdmin(){
         <span style="font-size:14px">分享連結導向「體驗版」（不發序號，網址會自動加上 ?mode=share）</span></label>
       <label class="field" style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="resultPages" ${draft.share.resultPages ? "checked" : ""} style="width:20px;height:20px">
         <span style="font-size:14px">臉書／LINE 分享顯示玩家的正確率結果圖（需已上傳 r 資料夾）</span></label>
+      <div class="field"><label for="f_fbMobileMode">手機臉書分享方式</label><select id="f_fbMobileMode" data-path="share.fbMobileMode" style="font:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">
+        <option value="image" ${(draft.share.fbMobileMode||"image")==="image"?"selected":""}>分享結果圖片（編輯畫面立即看到圖，連結自動複製）</option>
+        <option value="link" ${draft.share.fbMobileMode==="link"?"selected":""}>分享連結（發布後顯示預覽卡，可點擊進入遊戲）</option></select></div>
       ${field("結果預覽版本號（更換結果圖後改成新數字，可避開臉書／LINE 舊快取）","share.previewVersion")}
       ${field("分享文字（{title} = 遊戲名稱、{rate} = 正確率）","share.text", true)}
       ${field("分享圖主標（顯示於活動主視覺圖下方）","share.imageTitle")}
@@ -1183,8 +1201,22 @@ function isMobileDevice(){
 $("#shareFB").addEventListener("click", async (e) => {
   if(!isMobileDevice()) return;
   e.preventDefault();
-  toast("請在分享選單中選擇 Facebook");
   const url = resultShareUrl();
+  if((site.share.fbMobileMode || "image") === "image" && record){
+    // 分享結果圖片：臉書編輯畫面會立即顯示圖片；遊戲連結先複製到剪貼簿，供玩家貼在貼文中
+    let copied = false;
+    try{ await navigator.clipboard.writeText(url); copied = true; }catch(_){}
+    try{
+      const file = await getShareImageFile();
+      if(navigator.canShare && navigator.canShare({ files: [file] })){
+        toast(copied ? "請選擇 Facebook；遊戲連結已複製，可貼在貼文中" : "請在分享選單中選擇 Facebook");
+        await navigator.share({ files: [file] });
+        return;
+      }
+    }catch(err){ if(err && err.name === "AbortError") return; }
+    // 不支援分享圖片時，改用分享連結
+  }
+  toast("請在分享選單中選擇 Facebook");
   if(navigator.share){
     // 只傳網址：臉書 App 收到「文字＋網址」時常當成純文字貼文而不產生預覽圖
     try{ await navigator.share({ url }); return; }
