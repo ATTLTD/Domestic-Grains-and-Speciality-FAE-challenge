@@ -1183,9 +1183,11 @@ function isMobileDevice(){
 $("#shareFB").addEventListener("click", async (e) => {
   if(!isMobileDevice()) return;
   e.preventDefault();
+  toast("請在分享選單中選擇 Facebook");
   const url = resultShareUrl();
   if(navigator.share){
-    try{ await navigator.share({ title: site.gameTitle, text: shareText(), url }); return; }
+    // 只傳網址：臉書 App 收到「文字＋網址」時常當成純文字貼文而不產生預覽圖
+    try{ await navigator.share({ url }); return; }
     catch(err){ if(err && err.name === "AbortError") return; }
   }
   let copied = false;
