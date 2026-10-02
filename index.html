@@ -352,7 +352,9 @@ const DEFAULT_SITE = {
     toNoSerial: true, // true：分享出去的連結導向不發序號的體驗版
     previewVersion: "2", // 結果預覽頁網址加上 ?v=版本號，用來避開臉書／LINE 的舊快取；需要強制更新時改成新的數字
     fbMobileMode: "image", // 手機臉書分享方式：image 分享結果圖片（編輯畫面立即可見）／link 分享連結（由臉書產生預覽卡）
-    resultPages: true, // true：臉書／LINE 分享改用 r/0.html～r/100.html 結果預覽頁（需上傳 r 資料夾）
+    resultPages: true,
+    // 各正確率的短網址（選填）。有填就優先使用；短網址應轉向 r/正確率.html?v=版本號
+    shortUrls: { "0": "https://reurl.cc/3ypd30", "20": "https://reurl.cc/QNG84Z", "40": "https://reurl.cc/p84QLb", "60": "https://reurl.cc/dOlK7M", "80": "https://reurl.cc/jVYbDM", "100": "https://reurl.cc/GgLMAx" }, // true：臉書／LINE 分享改用 r/0.html～r/100.html 結果預覽頁（需上傳 r 資料夾）
     imageTitle: "國產雜糧特作食農知識小挑戰" // 分享圖主標（顯示於主視覺圖下方，多行時取最後一行）
   },
   questions: null // null = 使用下方內建範例題庫
@@ -923,6 +925,8 @@ function shareText(){ return site.share.text.replace("{title}", site.gameTitle).
    分享時依正確率帶入對應網址；點開後會自動轉到遊戲（體驗版）。 */
 function resultShareUrl(){
   const rate = record ? record.rate : null;
+  const shortUrl = rate != null && site.share.shortUrls && String(site.share.shortUrls[String(rate)] || "").trim();
+  if(shortUrl && /^https?:\/\//i.test(shortUrl)) return shortUrl;
   if(!site.share.resultPages || rate == null || ![0,20,40,60,80,100].includes(rate)) return shareUrl();
   let base = site.share.url || location.href.split("#")[0].split("?")[0];
   try{
@@ -1083,6 +1087,11 @@ function renderAdmin(){
       <div class="field"><label for="f_fbMobileMode">手機臉書分享方式</label><select id="f_fbMobileMode" data-path="share.fbMobileMode" style="font:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">
         <option value="image" ${(draft.share.fbMobileMode||"image")==="image"?"selected":""}>分享結果圖片（編輯畫面立即看到圖，連結自動複製）</option>
         <option value="link" ${draft.share.fbMobileMode==="link"?"selected":""}>分享連結（發布後顯示預覽卡，可點擊進入遊戲）</option></select></div>
+      <div class="field"><label>各正確率的短網址（選填；未填則使用原本網址）</label>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center">
+        ${["0","20","40","60","80","100"].map(r => `<span style="font-size:13px;color:var(--muted)">${r}%</span><input type="text" inputmode="url" data-short="${r}" placeholder="https://…" value="${escapeAttr((draft.share.shortUrls||{})[r]||"")}" style="font:inherit;font-size:14px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)">`).join("")}
+        </div>
+        <small style="color:var(--muted)">短網址需轉向「…/r/正確率.html?v=${escapeAttr(draft.share.previewVersion||"")}」，填入後請先用臉書分享偵錯工具測試預覽。</small></div>
       ${field("結果預覽版本號（更換結果圖後改成新數字，可避開臉書／LINE 舊快取）","share.previewVersion")}
       ${field("分享文字（{title} = 遊戲名稱、{rate} = 正確率）","share.text", true)}
       ${field("分享圖主標（顯示於活動主視覺圖下方）","share.imageTitle")}
@@ -1121,6 +1130,9 @@ function renderAdmin(){
     const [a,b] = inp.dataset.path.split("."); if(b) draft[a][b] = inp.value; else draft[a] = inp.value;
   }));
   const tns = $("#toNoSerial"); if(tns) tns.addEventListener("change", () => { draft.share.toNoSerial = tns.checked; });
+  $("#adminBody").querySelectorAll("[data-short]").forEach(inp => inp.addEventListener("input", () => {
+    draft.share.shortUrls = {...(draft.share.shortUrls || {}), [inp.dataset.short]: inp.value.trim()};
+  }));
   const rps = $("#resultPages"); if(rps) rps.addEventListener("change", () => { draft.share.resultPages = rps.checked; });
   $("#adminBody").querySelectorAll("[data-num]").forEach(inp => inp.addEventListener("input", () => {
     const n = parseInt(inp.value, 10);
