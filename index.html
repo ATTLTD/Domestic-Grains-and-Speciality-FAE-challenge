@@ -141,6 +141,58 @@ body.booting .overlay,body.booting .btxt{visibility:hidden}
 .submitbar{position:sticky;bottom:0;z-index:5;background:var(--surface);padding:12px 20px calc(14px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
 .submitbar .hint{text-align:center;font-size:13px;color:var(--muted);margin:0 0 8px}
 
+/* 六面體方塊答題 */
+.cube-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:22px 16px calc(20px + env(safe-area-inset-bottom,0px));background:var(--bg);overflow:hidden}
+.cube-scene{--s:min(88vw,360px);width:var(--s);height:var(--s);perspective:1100px;flex:none;transition:transform .6s cubic-bezier(.5,0,.3,1),opacity .6s ease}
+.cube-scene.shrink{transform:scale(.18) translateY(-40%);opacity:0}
+.cube{position:relative;width:100%;height:100%;transform-style:preserve-3d;transform:translateZ(calc(var(--s) / -2));transition:transform .85s cubic-bezier(.45,.05,.25,1)}
+.cube.no-anim{transition:none}
+.face{position:absolute;inset:0;box-sizing:border-box;display:flex;flex-direction:column;padding:14px 14px 12px;border-radius:22px;
+  background-color:var(--surface);border:5px solid var(--primary);
+  background-image:linear-gradient(color-mix(in srgb,var(--primary) 7%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--primary) 7%,transparent) 1px,transparent 1px);
+  background-size:33.34% 33.34%;background-position:-1px -1px;
+  -webkit-backface-visibility:hidden;backface-visibility:hidden;box-shadow:0 10px 30px rgba(46,53,39,.18)}
+.face[inert]{pointer-events:none}
+.face.front{transform:translateZ(calc(var(--s) / 2))}
+.face.right{transform:rotateY(90deg) translateZ(calc(var(--s) / 2))}
+.face.back{transform:rotateY(180deg) translateZ(calc(var(--s) / 2))}
+.face.left{transform:rotateY(-90deg) translateZ(calc(var(--s) / 2))}
+.face.top{transform:rotateX(90deg) translateZ(calc(var(--s) / 2))}
+.face.bottom{transform:rotateX(-90deg) translateZ(calc(var(--s) / 2))}
+/* 裝飾面：呼應主視覺魔術方塊的 3×3 色塊 */
+.face.deco{padding:10px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:8px;background:#5E7A45;border-color:#4F6B3C}
+.face.deco i{border-radius:10px;background:#E6ECC4}
+.face.deco i:nth-child(3n+2){background:#C9D98A}
+.face.deco i:nth-child(4n){background:#B9C6E0}
+.face.deco i:nth-child(5){background:#F0D27A}
+.panel{display:flex;flex-direction:column;height:100%;min-width:0;margin:0;padding:0;border:0}
+.fhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.fnum{font-family:var(--display);font-size:22px;line-height:1;color:var(--primary)}
+.fcount{margin-left:auto;font-size:12px;color:var(--muted)}
+.fbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:2px}
+.face .qtext{font-size:16px;font-weight:700;line-height:1.45;margin:0 0 10px}
+.face .qtag{margin-top:0}
+.face .opts{gap:7px}
+.face .opt{min-height:42px;padding:8px 11px;gap:10px;font-size:15px;line-height:1.35;border-radius:11px}
+.face .opt .mark{width:20px;height:20px}
+.face.kvface{padding:10px;background:#E3D6C6;border-color:#4F6B3C}
+.panel.kv{align-items:center;justify-content:center;gap:6px}
+.panel.kv img{width:100%;height:auto;max-height:84%;object-fit:contain}
+.panel.kv p{margin:0;font-family:var(--display);font-size:20px;color:#4F6B3C}
+.cube-hint{margin:0;min-height:1.4em;font-size:13px;color:var(--muted);text-align:center}
+.cube-nav{display:grid;grid-template-columns:1fr 2fr;gap:10px;width:var(--s,360px);max-width:min(88vw,360px)}
+.cube-nav .btn{min-height:50px;font-size:18px}
+.cube-nav .btn.ghost{font-size:15px}
+/* 結果大圖 */
+.result-hero{display:block;width:100%;max-width:420px;height:auto;border-radius:18px;box-shadow:0 10px 26px rgba(46,53,39,.18);margin:0 0 16px}
+.result-hero.pop{animation:heroPop .7s cubic-bezier(.2,1.25,.4,1) both}
+@keyframes heroPop{from{transform:scale(.25);opacity:0}to{transform:scale(1);opacity:1}}
+.resultbox.has-hero .stamp{display:none}
+@media (prefers-reduced-motion: reduce){
+  .cube,.cube-scene{transition-duration:.01s}
+  .result-hero.pop{animation:none}
+}
+
 /* Result */
 .resultbox{display:flex;flex-direction:column;align-items:center;text-align:center}
 .resultbox h1{margin-bottom:18px}
@@ -260,10 +312,13 @@ body.booting .overlay,body.booting .btxt{visibility:hidden}
       <div class="row"><span>已作答 <b id="doneCount">0</b> / <span id="totalCount">5</span></span><span>單選 ○　複選 □</span></div>
       <div class="segs" id="segs"></div>
     </div>
-    <form class="qlist" id="qlist" onsubmit="return false"></form>
-    <div class="submitbar">
-      <p class="hint" id="submitHint"></p>
-      <button class="btn" id="submitBtn" disabled>送出答案</button>
+    <div class="cube-area">
+      <div class="cube-scene" id="cubeScene"><div class="cube" id="cube"></div></div>
+      <p class="cube-hint" id="submitHint" aria-live="polite"></p>
+      <div class="cube-nav">
+        <button class="btn ghost" id="prevBtn" type="button">上一題</button>
+        <button class="btn" id="submitBtn" type="button" disabled>下一題</button>
+      </div>
     </div>
   </section>
 
@@ -274,6 +329,7 @@ body.booting .overlay,body.booting .btxt{visibility:hidden}
       <div class="bg"></div><div class="scrim"></div>
       <div class="overlay resultbox">
         <h1 id="resTitle"></h1>
+        <img class="result-hero" id="resultHero" alt="" hidden>
         <div class="stamp" id="stamp"><div><div class="pct"><span id="pct">0</span><small>%</small></div><div class="lbl">正確率</div></div></div>
         <p class="rate-line">您的答題正確率為 <b id="pct2">0</b><b>%</b></p>
         <div id="ticketWrap" hidden>
@@ -643,7 +699,7 @@ function apiBackend(){
       const j = await call("site"); return {issued: Number(j.issued)||0, limit: Number(j.limit)||site.serialLimit};
     },
     async getRecord(){ const loc = getLocalRecord(); if(loc) return loc; const j = await call("check"); if(j.record) setLocalRecord(j.record); return j.record; },
-    async submit(rate, passed, review){ const j = await call("submit", {rate}); const rec = {...j.record, review, at: Date.now()}; setLocalRecord(rec); return rec; },
+    async submit(rate, passed, review){ const j = await call("submit", {rate}); const rec = {rate, passed, serial: null, ...(j.record || {}), review, at: Date.now()}; setLocalRecord(rec); return rec; },
     async resetMine(){ clearLocalRecord(); }
   };
 }
@@ -759,51 +815,134 @@ function updateStartBtn(){
 }
 
 /* ---- 答題 ---- */
+/* 六面體方塊：每答完一題翻到下一面，第六面為活動主視覺。
+   翻面時把下一面內容放到即將轉到正面的那一面，動畫結束後再移回正面並歸零角度，
+   讓玩家操作的永遠是正面（避免 3D 旋轉後點擊位置失準）。 */
+const FLIP_DIR = ["", "right", "right", "right", "top", "bottom"]; // 進入第 i 面時的翻轉方向
+const REVERSE = { right: "left", left: "right", top: "bottom", bottom: "top" };
+const SHOW = { right: "rotateY(-90deg)", left: "rotateY(90deg)", top: "rotateX(-90deg)", bottom: "rotateX(90deg)" };
+let faceIdx = 0, flipping = false, panels = [];
+function cubeFace(name){ return $("#cube .face." + name); }
+function setDeco(face){ face.className = "face " + face.dataset.slot + " deco"; face.innerHTML = "<i></i>".repeat(9); face.inert = true; }
+function putPanel(face, panel){
+  face.className = "face " + face.dataset.slot + (panel.classList.contains("kv") ? " kvface" : "");
+  face.innerHTML = ""; face.appendChild(panel);
+}
+function flipTo(i, dir){
+  if(flipping || i === faceIdx) return Promise.resolve();
+  flipping = true;
+  const cube = $("#cube"), front = cubeFace("front"), slot = cubeFace(dir);
+  putPanel(slot, panels[i]); slot.inert = true; front.inert = true;
+  cube.classList.remove("no-anim");
+  cube.style.transform = `translateZ(calc(var(--s) / -2)) ${SHOW[dir]}`;
+  updateProgress(true);
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if(done) return; done = true;
+      cube.removeEventListener("transitionend", onEnd);
+      putPanel(front, panels[i]); front.inert = false;
+      cube.classList.add("no-anim"); cube.style.transform = "translateZ(calc(var(--s) / -2))";
+      void cube.offsetWidth; cube.classList.remove("no-anim");
+      setDeco(slot);
+      faceIdx = i; flipping = false; updateProgress(); resolve();
+    };
+    const onEnd = (e) => { if(e.target === cube && e.propertyName === "transform") finish(); };
+    cube.addEventListener("transitionend", onEnd);
+    setTimeout(finish, 1100); // 減少動態效果或瀏覽器未觸發事件時的保險
+  });
+}
 function buildQuiz(){
-  const picked = shuffle(bank()).slice(0, site.questionCount);
+  const picked = shuffle(bank()).slice(0, Math.min(site.questionCount, 5));
   current = picked.map(q => {
     const order = shuffle(q.options.map((_,i)=>i));
     return {q, order};
   });
-  const form = $("#qlist"); form.innerHTML = "";
-  current.forEach((item, qi) => {
+  panels = current.map((item, qi) => {
     const multi = item.q.type === "multi";
-    const wrap = document.createElement("fieldset");
-    wrap.className = "q"; wrap.style.border = "0"; wrap.style.margin = "0";
-    const head = document.createElement("div"); head.className = "qhead";
-    const num = document.createElement("div"); num.className = "qnum"; num.textContent = qi+1;
-    const txt = document.createElement("div");
+    const panel = document.createElement("fieldset"); panel.className = "panel";
+    const head = document.createElement("div"); head.className = "fhead";
+    const num = document.createElement("span"); num.className = "fnum"; num.textContent = "Q" + (qi+1);
+    const tag = document.createElement("span"); tag.className = "qtag" + (multi?" multi":""); tag.textContent = multi ? "複選" : "單選";
+    const cnt = document.createElement("span"); cnt.className = "fcount"; cnt.textContent = `${qi+1} / ${current.length}`;
+    head.append(num, tag, cnt);
+    const body = document.createElement("div"); body.className = "fbody";
     const lg = document.createElement("legend"); lg.className = "qtext"; lg.textContent = item.q.q;
-    const tag = document.createElement("span"); tag.className = "qtag" + (multi?" multi":""); tag.textContent = multi ? "複選（可選多項）" : "單選";
-    txt.append(lg, tag); head.append(num, txt);
     const opts = document.createElement("div"); opts.className = "opts";
     item.order.forEach(oi => {
       const lab = document.createElement("label"); lab.className = "opt " + (multi?"multi":"single");
       const inp = document.createElement("input");
       inp.type = multi ? "checkbox" : "radio"; inp.name = "q"+qi; inp.value = oi;
-      inp.addEventListener("change", updateProgress);
+      inp.addEventListener("change", () => {
+        updateProgress();
+        // 單選題：選好後自動翻到下一題（最後一題需按「送出答案」）
+        if(!multi && qi < current.length - 1){
+          setTimeout(() => { if(faceIdx === qi && !flipping && answersOf(qi).length) flipTo(qi + 1, FLIP_DIR[qi + 1]); }, 450);
+        }
+      });
       const mk = document.createElement("span"); mk.className = "mark"; mk.setAttribute("aria-hidden","true");
       const t = document.createElement("span"); t.textContent = item.q.options[oi];
       lab.append(inp, mk, t); opts.appendChild(lab);
     });
-    wrap.append(head, opts); form.appendChild(wrap);
+    body.append(lg, opts); panel.append(head, body);
+    return panel;
   });
-  $("#totalCount").textContent = site.questionCount;
-  const segs = $("#segs"); segs.innerHTML = ""; segs.style.gridTemplateColumns = `repeat(${site.questionCount},1fr)`;
-  for(let i=0;i<site.questionCount;i++) segs.appendChild(document.createElement("i"));
+  // 第六面：活動主視覺
+  const kv = document.createElement("div"); kv.className = "panel kv";
+  const kvImg = document.createElement("img"); kvImg.src = ART.SHARE_LOGO; kvImg.alt = "國產雜糧好味道 在地特作風味好";
+  const kvTxt = document.createElement("p"); kvTxt.textContent = "挑戰完成！";
+  kv.append(kvImg, kvTxt); panels[5] = kv;
+  // 建立方塊六面
+  const cube = $("#cube"); cube.innerHTML = "";
+  ["front","right","back","left","top","bottom"].forEach(name => {
+    const f = document.createElement("div"); f.dataset.slot = name; cube.appendChild(f); setDeco(f);
+  });
+  putPanel(cubeFace("front"), panels[0]); cubeFace("front").inert = false;
+  cube.classList.add("no-anim"); cube.style.transform = "translateZ(calc(var(--s) / -2))"; void cube.offsetWidth; cube.classList.remove("no-anim");
+  faceIdx = 0; flipping = false;
+  $("#cubeScene").classList.remove("shrink");
+  $("#totalCount").textContent = current.length;
+  const segs = $("#segs"); segs.innerHTML = ""; segs.style.gridTemplateColumns = `repeat(${current.length},1fr)`;
+  for(let i=0;i<current.length;i++) segs.appendChild(document.createElement("i"));
   updateProgress();
 }
-function answersOf(qi){ return [...document.querySelectorAll(`input[name="q${qi}"]:checked`)].map(i => Number(i.value)); }
-function updateProgress(){
+function answersOf(qi){ return panels[qi] ? [...panels[qi].querySelectorAll("input:checked")].map(i => Number(i.value)) : []; }
+function updateProgress(busy){
   let done = 0; const segs = $("#segs").children;
   current.forEach((_,qi) => { const a = answersOf(qi).length>0; if(a) done++; segs[qi] && segs[qi].classList.toggle("done", a); });
   $("#doneCount").textContent = done;
-  const left = current.length - done;
-  $("#submitBtn").disabled = left > 0;
-  $("#submitHint").textContent = left > 0 ? `還有 ${left} 題未作答` : "全部作答完成，送出後無法修改";
+  const btn = $("#submitBtn"), prev = $("#prevBtn"), hint = $("#submitHint");
+  if(busy || flipping || faceIdx >= current.length){ btn.disabled = true; prev.disabled = true; return; }
+  const last = faceIdx === current.length - 1, answered = answersOf(faceIdx).length > 0;
+  const multi = current[faceIdx] && current[faceIdx].q.type === "multi";
+  btn.textContent = last ? "送出答案" : "下一題";
+  btn.disabled = !answered || (last && done < current.length);
+  prev.disabled = faceIdx === 0;
+  hint.textContent = last
+    ? (done < current.length ? `還有 ${current.length - done} 題未作答，可按「上一題」返回` : "確認答案後按「送出答案」")
+    : (multi ? "複選題：選好所有答案後按「下一題」" : "選擇答案後會自動翻到下一題");
+}
+function nextFace(){
+  if(flipping) return;
+  if(faceIdx < current.length - 1){ if(answersOf(faceIdx).length) flipTo(faceIdx + 1, FLIP_DIR[faceIdx + 1]); }
+  else submitQuiz();
+}
+function prevFace(){
+  if(flipping || faceIdx <= 0 || faceIdx >= current.length) return;
+  flipTo(faceIdx - 1, REVERSE[FLIP_DIR[faceIdx]]);
+}
+/* 送出後：翻到主視覺面 → 方塊縮小淡出 → 結果大圖彈出 */
+async function cubeToResult(heroReady){
+  await Promise.all([sleep(2050), heroReady]); // 翻面約 0.85 秒＋主視覺面停留約 1.2 秒
+  $("#cubeScene").classList.add("shrink");
+  await sleep(560);
+  show("p-result");
+  const hero = $("#resultHero");
+  if(!hero.hidden){ hero.classList.remove("pop"); void hero.offsetWidth; hero.classList.add("pop"); }
 }
 async function submitQuiz(){
-  const btn = $("#submitBtn"); btn.disabled = true; btn.textContent = "送出中…";
+  const btn = $("#submitBtn"); btn.disabled = true; $("#prevBtn").disabled = true; btn.textContent = "送出中…";
+  flipTo(5, FLIP_DIR[5]); // 翻到第六面：主視覺
   try{ await backendReady; }catch(e){}
   if(!backend) backend = localBackend();
   let correct = 0;
@@ -824,8 +963,8 @@ async function submitQuiz(){
   if(NO_SERIAL){
     // 體驗版：只在畫面上顯示結果，不送後端、不保存紀錄
     record = {rate, passed, review, serial:null, shareMode:true, at:Date.now()};
-    renderResult(record, true); updateStartBtn(); show("p-result");
-    btn.textContent = "送出答案";
+    renderResult(record, true); updateStartBtn();
+    await cubeToResult(heroPromise);
     return;
   }
   try{
@@ -843,8 +982,7 @@ async function submitQuiz(){
   applySite();
   renderResult(record, true);
   updateStartBtn();
-  show("p-result");
-  btn.textContent = "送出答案";
+  await cubeToResult(heroPromise);
 }
 
 /* ---- 結果 ---- */
@@ -870,7 +1008,21 @@ function renderResult(rec, animate, serialView){
   flag.textContent = "目前為本機示範模式，序號僅在此裝置遞增，正式上線需接後端。";
   updateShareLinks();
   renderReview(rec.review);
-  prepareShareImage();
+  heroPromise = renderResultHero(rec);
+}
+/* 結果頁大圖：與分享圖同款（不含「你也來試試看」），只呈現正確率、不含序號 */
+let heroPromise = Promise.resolve(), heroKey = "", heroUrl = "";
+function renderResultHero(rec){
+  const key = [rec.rate, rec.passed, site.share.imageTitle, site.gameTitle].join("|");
+  const img = $("#resultHero"), box = img.closest(".resultbox");
+  if(key === heroKey && heroUrl) return Promise.resolve();
+  heroKey = key;
+  return makeShareImage({ forPage: true }).then(blob => {
+    if(heroKey !== key) return;
+    if(heroUrl) URL.revokeObjectURL(heroUrl);
+    heroUrl = URL.createObjectURL(blob);
+    return new Promise(res => { img.onload = res; img.onerror = res; img.src = heroUrl; img.alt = `答題正確率 ${rec.rate}%`; img.hidden = false; box.classList.add("has-hero"); });
+  }).catch(() => { img.hidden = true; box.classList.remove("has-hero"); });
 }
 /* 預先產生分享圖，讓點擊分享時能立即開啟分享選單（部分手機瀏覽器要求在點擊後短時間內呼叫） */
 let shareImageCache = { key: "", blob: null };
@@ -957,7 +1109,8 @@ function updateShareLinks(){
 
 /* 分享圖：只呈現正確率，不含序號 */
 function loadImg(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
-async function makeShareImage(){
+async function makeShareImage(opts){
+  const forPage = !!(opts && opts.forPage);
   try{ await document.fonts.ready; }catch(e){}
   const W=1080, H=1350, c=document.createElement("canvas"); c.width=W; c.height=H;
   const x=c.getContext("2d");
@@ -1003,7 +1156,8 @@ async function makeShareImage(){
   const rx = 790;
   x.fillStyle=G; x.font=`64px ${disp}`;
   x.fillText(record.passed ? "挑戰成功！" : "完成挑戰！", rx, cy - 20);
-  // 「你也來試試看」膠囊
+  // 「你也來試試看」膠囊（結果頁大圖不顯示）
+  if(forPage) return new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
   x.font=`42px ${disp}`; const pt="你也來試試看！", pw = x.measureText(pt).width + 64, ph = 72;
   const px = rx - pw/2, py = cy + 30;
   x.fillStyle=O; x.beginPath();
@@ -1214,7 +1368,8 @@ function startQuiz(){ buildQuiz(); show("p-quiz"); }
 $("#startBtn").addEventListener("click", startQuiz);
 $("#replayBtn").addEventListener("click", startQuiz);
 $("#mySerialBtn").addEventListener("click", () => { renderResult(record, false, true); show("p-result"); });
-$("#submitBtn").addEventListener("click", submitQuiz);
+$("#submitBtn").addEventListener("click", nextFace);
+$("#prevBtn").addEventListener("click", prevFace);
 $("#shareIG").addEventListener("click", shareIG);
 /* 手機上的臉書分享：臉書 App 不處理網頁版分享網址（只會打開 App），
    因此改用系統分享選單，由玩家選擇 Facebook；不支援時改為複製連結。電腦版維持原本的分享視窗。 */
