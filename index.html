@@ -1118,7 +1118,9 @@ function renderResultHero(rec){
   if(key === heroKey && img.getAttribute("src") && !img.hidden) return Promise.resolve();
   heroKey = key;
   const withTimeout = (pr, ms) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
-  return withTimeout(makeShareImage({ forPage: true }).then(blobToDataURL), 6000).then(url => {
+  // 新的成績：先隱藏舊圖（改顯示正確率印章），避免短暫或持續顯示上一輪的圖
+  fallback();
+  return withTimeout(makeShareImage({ forPage: true, rec: { rate: rec.rate, passed: rec.passed } }).then(blobToDataURL), 6000).then(url => {
     if(heroKey !== key) return;
     return new Promise(res => {
       img.onload = () => { img.hidden = false; box.classList.add("has-hero"); res(); };
@@ -1215,6 +1217,7 @@ function updateShareLinks(){
 function loadImg(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
 async function makeShareImage(opts){
   const forPage = !!(opts && opts.forPage);
+  const R = (opts && opts.rec) || record; // 要繪製的成績：結果頁大圖傳入當輪成績，避免讀到上一輪的紀錄
   try{ await Promise.race([document.fonts.ready, sleep(1500)]); }catch(e){}
   const W=1080, H=1350, c=document.createElement("canvas"); c.width=W; c.height=H;
   const x=c.getContext("2d");
@@ -1249,17 +1252,17 @@ async function makeShareImage(opts){
   const cy = Math.min(1120, artBottom + 230), sx = 330;
   x.save(); x.translate(sx, cy); x.rotate(-8*Math.PI/180);
   x.fillStyle="#fff"; x.beginPath(); x.arc(0,0,200,0,Math.PI*2); x.fill();
-  const ring = record.passed ? O : "#9DAF7A";
+  const ring = R.passed ? O : "#9DAF7A";
   x.strokeStyle=ring; x.lineWidth=14; x.beginPath(); x.arc(0,0,176,0,Math.PI*2); x.stroke();
   x.lineWidth=5; x.beginPath(); x.arc(0,0,156,0,Math.PI*2); x.stroke();
   x.fillStyle=G; let rs=130; x.font=`${rs}px ${disp}`;
-  const rw = x.measureText(record.rate+"%").width; if(rw > 280){ rs = Math.floor(rs*280/rw); x.font=`${rs}px ${disp}`; }
-  x.fillText(record.rate+"%", 0, 40);
+  const rw = x.measureText(R.rate+"%").width; if(rw > 280){ rs = Math.floor(rs*280/rw); x.font=`${rs}px ${disp}`; }
+  x.fillText(R.rate+"%", 0, 40);
   x.fillStyle="#3A3A2E"; x.font=`38px ${disp}`; x.fillText("答題正確率", 0, 100);
   x.restore();
   const rx = 790;
   x.fillStyle=G; x.font=`64px ${disp}`;
-  x.fillText(record.passed ? "挑戰成功！" : "完成挑戰！", rx, cy - 20);
+  x.fillText(R.passed ? "挑戰成功！" : "完成挑戰！", rx, cy - 20);
   // 「你也來試試看」膠囊（結果頁大圖不顯示）
   if(forPage) return new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
   x.font=`42px ${disp}`; const pt="你也來試試看！", pw = x.measureText(pt).width + 64, ph = 72;
