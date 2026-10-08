@@ -624,7 +624,7 @@ function claudeBackend(db, user, uid, canEdit){
   async function claimSerial(limit){
     const holder = uid + "-" + Math.random().toString(36).slice(2,8);
     for(let i=0;i<25;i++){
-      const r = await counterRef.acquire({holder, ttlMs:5000});
+      const r = await counterRef.acquire({holder, ttlMs:3000});
       if(r.acquired){
         const s = await counterRef.get();
         const issued = (s.exists && Number(s.data().n)) ? Number(s.data().n) : 0;
@@ -909,7 +909,7 @@ function buildQuiz(){
       inp.addEventListener("change", () => {
         const last = qi === current.length - 1;
         if(multi){
-          // 複選題：勾選後停留 5 秒自動翻到下一題（最後一題則自動送出）；每次變更勾選都重新計時
+          // 複選題：勾選後停留 3 秒自動翻到下一題（最後一題則自動送出）；每次變更勾選都重新計時
           if(answersOf(qi).length) scheduleAuto(qi, AUTO_MULTI_MS); else clearAuto();
         }else if(last){
           // 最後一題為單選：選完停留 2 秒後自動送出；改選會重新計時
@@ -948,8 +948,8 @@ function buildQuiz(){
   updateProgress();
 }
 function answersOf(qi){ return panels[qi] ? [...panels[qi].querySelectorAll("input:checked")].map(i => Number(i.value)) : []; }
-/* 自動翻頁／送出計時：複選題 5 秒、最後一題單選 2 秒；倒數顯示在方塊下方 */
-const AUTO_MULTI_MS = 5000, AUTO_LAST_SINGLE_MS = 2000;
+/* 自動翻頁／送出計時：複選題 3 秒、最後一題單選 2 秒；倒數顯示在方塊下方 */
+const AUTO_MULTI_MS = 3000, AUTO_LAST_SINGLE_MS = 2000;
 let autoTimer = null, autoTick = null, autoQi = -1, autoDeadline = 0;
 function clearAuto(){ clearTimeout(autoTimer); clearInterval(autoTick); autoTimer = autoTick = null; autoQi = -1; }
 function scheduleAuto(qi, ms){
@@ -979,7 +979,7 @@ function updateProgress(busy){
   const secs = counting ? Math.max(1, Math.ceil((autoDeadline - Date.now()) / 1000)) : 0;
   if(last && done < current.length) hint.textContent = `還有 ${current.length - done} 題未作答，可按「上一題」返回`;
   else if(counting) hint.textContent = last ? `${secs} 秒後自動送出` : `${secs} 秒後自動翻到下一題（可繼續勾選）`;
-  else if(multi) hint.textContent = last ? "複選題：勾選後 5 秒自動送出，也可直接按「送出答案」" : "複選題：勾選後 5 秒自動翻到下一題，也可直接按「下一題」";
+  else if(multi) hint.textContent = last ? "複選題：勾選後 3 秒自動送出，也可直接按「送出答案」" : "複選題：勾選後 3 秒自動翻到下一題，也可直接按「下一題」";
   else hint.textContent = last ? "選擇答案後 2 秒自動送出" : "選擇答案後會自動翻到下一題";
   hint.classList.toggle("counting", !!counting);
 }
