@@ -1051,9 +1051,10 @@ async function submitQuiz(){
 
 /* ---- 結果 ---- */
 function renderResult(rec, animate, serialView){
-  $("#pct").textContent = rec.rate; $("#pct2").textContent = rec.rate;
+  $("#pct").textContent = rec.rate; if($("#pct2")) $("#pct2").textContent = rec.rate;
   const repass = !!(rec.passed && rec.repass && !rec.shareMode);
-  $("#resTitle").textContent = rec.passed ? (repass ? site.result.repassTitle : site.result.passTitle) : site.result.failTitle;
+  const resTitleText = rec.passed ? (repass ? site.result.repassTitle : site.result.passTitle) : site.result.failTitle;
+  $("#resTitle").textContent = resTitleText || ""; $("#resTitle").hidden = !resTitleText; // 標題文字為空時隱藏整個標題
   const stamp = $("#stamp"); stamp.classList.toggle("pass", !!rec.passed);
   stamp.classList.remove("animate"); if(animate){ void stamp.offsetWidth; stamp.classList.add("animate"); }
   // 序號券：本次通過時顯示；從首頁「查看我的兌換序號」進入時也顯示
